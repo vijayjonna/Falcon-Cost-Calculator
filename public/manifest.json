@@ -1,0 +1,17 @@
+{
+  "short_name": "Falcon Calc",
+  "name": "Falcon Cost Calculator",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0b0f17",
+  "theme_color": "#2563eb",
+  "display": "standalone",
+  "orientation": "any"
+}

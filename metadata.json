@@ -1,0 +1,6 @@
+{
+  "name": "Falcon Cost Calculator",
+  "description": "Calculate custom interior project expenses room by room, with precise MDF/plywood, laminate, louvers, hardware, and separate box/frame labor cost estimates and per-room pricing overrides.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

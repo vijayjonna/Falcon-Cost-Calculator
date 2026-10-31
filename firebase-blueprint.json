@@ -1,0 +1,46 @@
+{
+  "entities": {
+    "Project": {
+      "title": "Project",
+      "description": "An interior cost calculation project with room estimates and price configurations.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the project"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the project"
+        },
+        "clientName": {
+          "type": "string",
+          "description": "Optional client name"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency symbol used in the project"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Timestamp when the project was created"
+        },
+        "updatedAt": {
+          "type": "number",
+          "description": "Timestamp when the project was last updated"
+        }
+      },
+      "required": ["id", "name", "userId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/projects/{projectId}": {
+      "schema": "Project",
+      "description": "User specific interior estimation files and projects"
+    }
+  }
+}
