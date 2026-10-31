@@ -1,0 +1,50 @@
+<svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+  <!-- Architectural Drafting Framework (CAD / Blueprint Crosshairs) -->
+  <g stroke="#184572" stroke-width="9" stroke-linecap="square">
+    <!-- Top horizontal drafting line with crosshair extension -->
+    <line x1="162" y1="108" x2="436" y2="108" />
+    
+    <!-- Right vertical drafting line - upper section -->
+    <line x1="412" y1="80" x2="412" y2="198" />
+    
+    <!-- Right vertical drafting line - lower section -->
+    <line x1="412" y1="300" x2="412" y2="444" />
+    
+    <!-- Bottom horizontal drafting line with crosshair extension -->
+    <line x1="268" y1="418" x2="436" y2="418" />
+  </g>
+
+  <!-- Precision Architectural Falcon Silhouette -->
+  <g fill="#184572">
+    <!-- Head, Crest, Hooked Beak, Torso, and Swept Tail -->
+    <path d="
+      M 284 236
+      L 276 210
+      L 368 210
+      C 382 210 398 220 416 248
+      C 418 258 406 266 392 266
+      L 384 258
+      C 360 286 330 330 304 372
+      L 258 444
+      L 204 444
+      L 252 380
+      L 284 370
+      Z
+    " />
+
+    <!-- Swept Aerodynamic 3-Blade Wing with Negative Space Kerf Slots -->
+    <path d="
+      M 56 64
+      C 126 128 196 186 268 242
+      L 268 360
+      C 246 394 226 422 220 442
+      L 194 442
+      C 188 418 160 380 62 280
+      C 126 316 168 328 198 322
+      C 162 284 122 240 58 172
+      C 126 214 172 228 206 220
+      C 160 174 112 122 56 64
+      Z
+    " />
+  </g>
+</svg>
