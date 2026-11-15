@@ -398,6 +398,22 @@ export function deleteProjectFromStorage(projectId: string): {
 }
 
 /**
+ * Clears all stored projects from localStorage and resets to a single blank project
+ */
+export function clearAllProjectsInStorage(): {
+  freshProject: ProjectData;
+  allProjects: ProjectData[];
+} {
+  localStorage.removeItem(FALCON_PROJECTS_KEY);
+  localStorage.removeItem(FALCON_ACTIVE_ID_KEY);
+  const freshProject = createDefaultProject('New Project');
+  const allProjects = [freshProject];
+  saveAllProjects(allProjects);
+  localStorage.setItem(FALCON_ACTIVE_ID_KEY, freshProject.id!);
+  return { freshProject, allProjects };
+}
+
+/**
  * Downloads a project as a JSON backup file
  */
 export function exportProjectFile(project: ProjectData): void {

@@ -277,17 +277,31 @@ export async function syncLocalProjectsToCloud(
   const existingIds = new Set(existingSnap.docs.map((d) => d.id));
   const nonEmptyLocals = localProjects.filter((p) => p.id && !isDefaultEmptyProject(p));
 
-  const toUpload =
-    existingIds.size > 0
-      ? nonEmptyLocals.filter((p) => !existingIds.has(p.id!))
-      : nonEmptyLocals.length > 0
-      ? nonEmptyLocals
-      : localProjects.slice(0, 1);
-
-  for (const p of toUpload) {
+  for (const p of nonEmptyLocals) {
     if (p.id && !existingIds.has(p.id)) {
       await saveProjectToCloud(userId, p);
     }
+  }
+}
+
+/**
+ * Deletes all projects stored in Firestore for the authenticated user
+ */
+export async function clearAllCloudProjects(userId: string): Promise<void> {
+  if (!userId) return;
+  const path = `users/${userId}/projects`;
+  const projectsCol = collection(db, 'users', userId, 'projects');
+  const q = query(projectsCol, where('userId', '==', userId));
+
+  let snap;
+  try {
+    snap = await getDocs(q);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+  }
+
+  for (const docSnap of snap.docs) {
+    await deleteProjectFromCloud(userId, docSnap.id);
   }
 }
 

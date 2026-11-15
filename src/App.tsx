@@ -60,6 +60,7 @@ import {
   subscribeToUserProjects,
   saveProjectToCloud,
   deleteProjectFromCloud,
+  clearAllCloudProjects,
   syncLocalProjectsToCloud,
   formatFirebaseErrorMessage,
   logout,
@@ -73,6 +74,7 @@ import {
   createNewProjectInStorage,
   duplicateProjectInStorage,
   deleteProjectFromStorage,
+  clearAllProjectsInStorage,
   importProjectFile,
   isDefaultEmptyProject,
   getProjectContentSignature,
@@ -427,11 +429,12 @@ export default function App() {
         new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       );
 
-      // Save to cloud only when initial cloud load has settled and content differs from last cloud snapshot
+      // Save to cloud only when initial cloud load has settled, project is non-empty (or already in cloud), and content differs
       if (currentUser && currentUser.uid && isInitialCloudSyncDoneRef.current && project.id) {
         const currentSig = getProjectContentSignature(project);
         const lastCloudSig = lastCloudSnapshotSigRef.current.get(project.id);
-        if (currentSig !== lastCloudSig) {
+        const shouldSkipBlank = isDefaultEmptyProject(project) && !lastCloudSnapshotSigRef.current.has(project.id);
+        if (!shouldSkipBlank && currentSig !== lastCloudSig) {
           setCloudSyncStatus('syncing');
           lastCloudSnapshotSigRef.current.set(project.id, currentSig);
           saveProjectToCloud(currentUser.uid, project)
@@ -529,6 +532,28 @@ export default function App() {
       lastCloudSnapshotSigRef.current.delete(projectId);
       setCloudSyncStatus('syncing');
       deleteProjectFromCloud(currentUser.uid, projectId)
+        .then(() => {
+          setCloudSyncStatus('synced');
+          setCloudSyncError(null);
+        })
+        .catch((err) => {
+          setCloudSyncStatus('offline');
+          setCloudSyncError(formatFirebaseErrorMessage(err));
+        });
+    }
+  };
+
+  const handleClearAllProjects = () => {
+    const { freshProject, allProjects: updated } = clearAllProjectsInStorage();
+    lastCloudSnapshotSigRef.current.clear();
+    setAllProjects(updated);
+    setProject(freshProject);
+    setSelectedRoomId(freshProject.rooms[0]?.id || '');
+    setSaveStatus('saved');
+    setLastSavedTime('Just now');
+    if (currentUser) {
+      setCloudSyncStatus('syncing');
+      clearAllCloudProjects(currentUser.uid)
         .then(() => {
           setCloudSyncStatus('synced');
           setCloudSyncError(null);
@@ -2796,6 +2821,7 @@ export default function App() {
         onCreateNewProject={handleCreateProject}
         onDuplicateProject={handleDuplicateProject}
         onDeleteProject={handleDeleteProject}
+        onClearAllProjects={handleClearAllProjects}
         onImportProject={handleImportProject}
         isDarkMode={isDarkMode}
         currentUser={currentUser}

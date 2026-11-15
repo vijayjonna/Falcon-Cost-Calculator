@@ -31,6 +31,7 @@ interface ProjectManagerModalProps {
   onCreateNewProject: (name: string) => void;
   onDuplicateProject: (project: ProjectData) => void;
   onDeleteProject: (projectId: string) => void;
+  onClearAllProjects?: () => void;
   onImportProject: (file: File) => void;
   isDarkMode: boolean;
   currentUser?: any;
@@ -46,6 +47,7 @@ export function ProjectManagerModal({
   onCreateNewProject,
   onDuplicateProject,
   onDeleteProject,
+  onClearAllProjects,
   onImportProject,
   isDarkMode,
   currentUser,
@@ -55,6 +57,7 @@ export function ProjectManagerModal({
   const [showNewInput, setShowNewInput] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
 
   const filteredProjects = useMemo(() => {
     return allProjects.filter((p) =>
@@ -280,6 +283,46 @@ export function ProjectManagerModal({
                 className="hidden"
               />
             </label>
+
+            {onClearAllProjects && (
+              confirmClearAll ? (
+                <div className="flex items-center gap-1 bg-rose-500/10 p-1 rounded-lg border border-rose-500/30">
+                  <span className="text-[10px] font-bold text-rose-500 px-1.5">Clear all data?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClearAllProjects();
+                      setConfirmClearAll(false);
+                      setDeleteConfirmId(null);
+                    }}
+                    className="bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold px-2.5 py-1 rounded shadow-xs"
+                  >
+                    Yes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmClearAll(false)}
+                    className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-bold px-2 py-1 rounded"
+                  >
+                    No
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmClearAll(true)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border flex items-center gap-1.5 transition-colors ${
+                    isDarkMode
+                      ? 'bg-slate-800 hover:bg-rose-950/50 text-rose-400 border-slate-700 hover:border-rose-500/40'
+                      : 'bg-white hover:bg-rose-50 text-rose-600 border-slate-200 hover:border-rose-300'
+                  }`}
+                  title="Remove all saved local and cloud projects and reset to a blank project"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>Clear All</span>
+                </button>
+              )
+            )}
           </div>
         </div>
 
