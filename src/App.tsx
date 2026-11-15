@@ -29,6 +29,7 @@ import {
   Cloud,
   LogIn,
   LogOut,
+  AlertCircle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from 'firebase/auth';
@@ -60,17 +61,21 @@ import {
   saveProjectToCloud,
   deleteProjectFromCloud,
   syncLocalProjectsToCloud,
+  formatFirebaseErrorMessage,
   logout,
 } from './cloudSync';
 import { testFirestoreConnection } from './firebase';
 import {
   loadAllProjects,
+  saveAllProjects,
   loadActiveProject,
   saveActiveProject,
   createNewProjectInStorage,
   duplicateProjectInStorage,
   deleteProjectFromStorage,
   importProjectFile,
+  isDefaultEmptyProject,
+  getProjectContentSignature,
   FALCON_THEME_KEY,
   FALCON_ACTIVE_ID_KEY,
   DEFAULT_ROOM,
@@ -250,8 +255,15 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isCloudModalOpen, setIsCloudModalOpen] = useState<boolean>(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'local-only'>('local-only');
+  const [cloudSyncError, setCloudSyncError] = useState<string | null>(null);
   const [showUserMenu, setShowUserMenu] = useState<boolean>(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Refs to prevent infinite Firestore read/write loops and race conditions
+  const projectRef = useRef<ProjectData>(project);
+  projectRef.current = project;
+  const lastCloudSnapshotSigRef = useRef<Map<string, string>>(new Map());
+  const isInitialCloudSyncDoneRef = useRef<boolean>(false);
 
   // Close user dropdown on outside click
   useEffect(() => {
@@ -270,48 +282,103 @@ export default function App() {
 
   // Test Firestore connection on boot and listen to Auth state changes
   useEffect(() => {
-    testFirestoreConnection();
+    testFirestoreConnection().then((res) => {
+      if (!res.ok && res.error) {
+        setCloudSyncError(res.error);
+      }
+    });
 
     const unsubscribe = subscribeToAuth((user) => {
       setCurrentUser(user);
-      if (user) {
-        setCloudSyncStatus('syncing');
-        // Initial sync of existing local projects to user's cloud account
-        const currentProjects = loadAllProjects();
-        syncLocalProjectsToCloud(user.uid, currentProjects).then(() => {
-          setCloudSyncStatus('synced');
-        });
-      } else {
+      if (!user) {
+        isInitialCloudSyncDoneRef.current = false;
+        lastCloudSnapshotSigRef.current.clear();
         setCloudSyncStatus('local-only');
+        setCloudSyncError(null);
       }
     });
 
     return () => unsubscribe();
   }, []);
 
-  // Listen to live updates from cloud across devices (computer <-> phone)
+  // Listen to live updates from cloud across devices and perform initial local-to-cloud merge
   useEffect(() => {
     if (!currentUser) return;
+
+    let cancelled = false;
+    isInitialCloudSyncDoneRef.current = false;
+    setCloudSyncStatus('syncing');
+    setCloudSyncError(null);
 
     const unsubscribe = subscribeToUserProjects(
       currentUser.uid,
       (cloudProjects) => {
+        if (cancelled) return;
+
+        // Record latest cloud content signatures before updating React state
+        const nextSigMap = new Map<string, string>();
+        for (const cp of cloudProjects) {
+          if (cp.id) {
+            nextSigMap.set(cp.id, getProjectContentSignature(cp));
+          }
+        }
+        lastCloudSnapshotSigRef.current = nextSigMap;
+
         if (cloudProjects.length > 0) {
+          saveAllProjects(cloudProjects);
           setAllProjects(cloudProjects);
-          // Keep active project matched
-          setProject((prev) => {
-            const found = cloudProjects.find((p) => p.id === prev.id);
-            return found || cloudProjects[0];
-          });
+
+          const currentActive = projectRef.current;
+          const currentSig = getProjectContentSignature(currentActive);
+          const matched = cloudProjects.find((p) => p.id === currentActive.id);
+
+          if (matched) {
+            const matchedSig = getProjectContentSignature(matched);
+            if (matchedSig !== currentSig) {
+              setProject(matched);
+            }
+          } else if (isDefaultEmptyProject(currentActive) || !isInitialCloudSyncDoneRef.current) {
+            const nextActive = cloudProjects[0];
+            setProject(nextActive);
+            setSelectedRoomId(nextActive.rooms[0]?.id || '');
+            if (nextActive.id) {
+              localStorage.setItem(FALCON_ACTIVE_ID_KEY, nextActive.id);
+            }
+          }
+
+          setCloudSyncStatus('synced');
+          setCloudSyncError(null);
+        } else if (isInitialCloudSyncDoneRef.current) {
           setCloudSyncStatus('synced');
         }
       },
       (err) => {
-        console.warn('Real-time sync error:', err);
+        if (cancelled) return;
+        console.error('Real-time sync error:', err);
+        setCloudSyncStatus('offline');
+        setCloudSyncError(formatFirebaseErrorMessage(err));
       }
     );
 
-    return () => unsubscribe();
+    const currentProjects = loadAllProjects();
+    syncLocalProjectsToCloud(currentUser.uid, currentProjects)
+      .then(() => {
+        if (cancelled) return;
+        isInitialCloudSyncDoneRef.current = true;
+        setCloudSyncStatus((prev) => (prev === 'offline' ? prev : 'synced'));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        isInitialCloudSyncDoneRef.current = true;
+        console.error('Initial local-to-cloud sync error:', err);
+        setCloudSyncStatus('offline');
+        setCloudSyncError(formatFirebaseErrorMessage(err));
+      });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [currentUser]);
 
   // Capture beforeinstallprompt for Android PWA / APK installation
@@ -348,10 +415,9 @@ export default function App() {
     }
   }, [project.rooms, selectedRoomId]);
 
-  // Auto-save project whenever any project detail changes
+  // Auto-save project locally and sync to cloud only when content actually changed
   useEffect(() => {
     setSaveStatus('saving');
-    if (currentUser) setCloudSyncStatus('syncing');
 
     const timer = setTimeout(() => {
       const updatedList = saveActiveProject(project);
@@ -361,14 +427,25 @@ export default function App() {
         new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       );
 
-      // Save to cloud in real time if user is logged in
-      if (currentUser && currentUser.uid) {
-        saveProjectToCloud(currentUser.uid, project)
-          .then(() => setCloudSyncStatus('synced'))
-          .catch((err) => {
-            console.error('Failed to sync to cloud:', err);
-            setCloudSyncStatus('offline');
-          });
+      // Save to cloud only when initial cloud load has settled and content differs from last cloud snapshot
+      if (currentUser && currentUser.uid && isInitialCloudSyncDoneRef.current && project.id) {
+        const currentSig = getProjectContentSignature(project);
+        const lastCloudSig = lastCloudSnapshotSigRef.current.get(project.id);
+        if (currentSig !== lastCloudSig) {
+          setCloudSyncStatus('syncing');
+          lastCloudSnapshotSigRef.current.set(project.id, currentSig);
+          saveProjectToCloud(currentUser.uid, project)
+            .then(() => {
+              setCloudSyncStatus('synced');
+              setCloudSyncError(null);
+            })
+            .catch((err) => {
+              lastCloudSnapshotSigRef.current.delete(project.id!);
+              console.error('Failed to sync to cloud:', err);
+              setCloudSyncStatus('offline');
+              setCloudSyncError(formatFirebaseErrorMessage(err));
+            });
+        }
       }
     }, 250);
 
@@ -401,8 +478,19 @@ export default function App() {
     setSelectedRoomId(newProject.rooms[0]?.id || '');
     setSaveStatus('saved');
     setLastSavedTime('Just now');
-    if (currentUser) {
-      saveProjectToCloud(currentUser.uid, newProject);
+    if (currentUser && newProject.id) {
+      lastCloudSnapshotSigRef.current.set(newProject.id, getProjectContentSignature(newProject));
+      setCloudSyncStatus('syncing');
+      saveProjectToCloud(currentUser.uid, newProject)
+        .then(() => {
+          setCloudSyncStatus('synced');
+          setCloudSyncError(null);
+        })
+        .catch((err) => {
+          lastCloudSnapshotSigRef.current.delete(newProject.id!);
+          setCloudSyncStatus('offline');
+          setCloudSyncError(formatFirebaseErrorMessage(err));
+        });
     }
   };
 
@@ -414,8 +502,19 @@ export default function App() {
     setSelectedRoomId(duplicatedProject.rooms[0]?.id || '');
     setSaveStatus('saved');
     setLastSavedTime('Just now');
-    if (currentUser) {
-      saveProjectToCloud(currentUser.uid, duplicatedProject);
+    if (currentUser && duplicatedProject.id) {
+      lastCloudSnapshotSigRef.current.set(duplicatedProject.id, getProjectContentSignature(duplicatedProject));
+      setCloudSyncStatus('syncing');
+      saveProjectToCloud(currentUser.uid, duplicatedProject)
+        .then(() => {
+          setCloudSyncStatus('synced');
+          setCloudSyncError(null);
+        })
+        .catch((err) => {
+          lastCloudSnapshotSigRef.current.delete(duplicatedProject.id!);
+          setCloudSyncStatus('offline');
+          setCloudSyncError(formatFirebaseErrorMessage(err));
+        });
     }
   };
 
@@ -427,7 +526,17 @@ export default function App() {
       setSelectedRoomId(nextProject.rooms[0]?.id || '');
     }
     if (currentUser) {
-      deleteProjectFromCloud(currentUser.uid, projectId);
+      lastCloudSnapshotSigRef.current.delete(projectId);
+      setCloudSyncStatus('syncing');
+      deleteProjectFromCloud(currentUser.uid, projectId)
+        .then(() => {
+          setCloudSyncStatus('synced');
+          setCloudSyncError(null);
+        })
+        .catch((err) => {
+          setCloudSyncStatus('offline');
+          setCloudSyncError(formatFirebaseErrorMessage(err));
+        });
     }
   };
 
@@ -438,8 +547,19 @@ export default function App() {
       setAllProjects(all);
       setProject(imported);
       setSelectedRoomId(imported.rooms[0]?.id || '');
-      if (currentUser) {
-        saveProjectToCloud(currentUser.uid, imported);
+      if (currentUser && imported.id) {
+        lastCloudSnapshotSigRef.current.set(imported.id, getProjectContentSignature(imported));
+        setCloudSyncStatus('syncing');
+        saveProjectToCloud(currentUser.uid, imported)
+          .then(() => {
+            setCloudSyncStatus('synced');
+            setCloudSyncError(null);
+          })
+          .catch((err) => {
+            lastCloudSnapshotSigRef.current.delete(imported.id!);
+            setCloudSyncStatus('offline');
+            setCloudSyncError(formatFirebaseErrorMessage(err));
+          });
       }
     } catch {
       alert('Could not import file. Please select a valid Falcon JSON backup.');
@@ -1096,6 +1216,22 @@ export default function App() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6" id="main-content">
+        {cloudSyncError && (
+          <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-500 flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5 min-w-0">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <span className="break-words">{cloudSyncError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCloudSyncError(null)}
+              className="p-1 rounded hover:bg-rose-500/15 shrink-0"
+              aria-label="Dismiss cloud error"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
         
         {/* Project Meta Information Banner */}
         <section className={`rounded-2xl border p-5 shadow-xs transition-colors duration-300 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`} id="project-meta-section">
@@ -2675,6 +2811,7 @@ export default function App() {
         onClose={() => setIsCloudModalOpen(false)}
         currentUser={currentUser}
         syncStatus={cloudSyncStatus}
+        syncError={cloudSyncError}
         isDarkMode={isDarkMode}
         projectCount={allProjects.length}
       />

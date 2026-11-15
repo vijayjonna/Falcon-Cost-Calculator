@@ -99,49 +99,138 @@ export function createDefaultProject(name: string = 'New Project'): ProjectData 
   };
 }
 
+const SAFE_ID_REGEX = /^[a-zA-Z0-9_-]{1,128}$/;
+
+function toFiniteNumber(val: any, fallback: number = 0): number {
+  const num = typeof val === 'number' ? val : Number(val);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+function toEpochMillis(val: any, fallback: number): number {
+  if (typeof val === 'number' && Number.isFinite(val) && val > 0) return val;
+  if (val && typeof val.toMillis === 'function') {
+    const ms = val.toMillis();
+    if (Number.isFinite(ms) && ms > 0) return ms;
+  }
+  return fallback;
+}
+
 /**
  * Safely normalizes and validates loaded project data against the expected schema
  */
 export function sanitizeProject(raw: any, fallbackName: string = 'Untitled Project'): ProjectData {
   const timestamp = Date.now();
-  const id = typeof raw?.id === 'string' && raw.id ? raw.id : `proj-${timestamp}-${Math.random().toString(36).substring(2, 7)}`;
-  const name = typeof raw?.name === 'string' && raw.name.trim() ? raw.name.trim() : fallbackName;
-  const clientName = typeof raw?.clientName === 'string' ? raw.clientName : '';
-  const currency = typeof raw?.currency === 'string' && raw.currency ? raw.currency : '₹';
-  
-  const globalPrices: Record<PriceItemKey, number> = {
-    ...DEFAULT_GLOBAL_PRICES,
-    ...(typeof raw?.globalPrices === 'object' && raw.globalPrices ? raw.globalPrices : {}),
-  };
+  const rawId = typeof raw?.id === 'string' ? raw.id.trim() : '';
+  const id = SAFE_ID_REGEX.test(rawId)
+    ? rawId
+    : `proj-${timestamp}-${Math.random().toString(36).substring(2, 7)}`;
 
-  const rooms: RoomData[] = Array.isArray(raw?.rooms) && raw.rooms.length > 0
-    ? raw.rooms.map((r: any, idx: number) => {
-        const roomId = typeof r?.id === 'string' && r.id ? r.id : `room-${timestamp}-${idx + 1}`;
-        const roomName = typeof r?.name === 'string' && r.name ? r.name : `Estimation Area ${idx + 1}`;
+  const rawName = typeof raw?.name === 'string' ? raw.name.trim() : '';
+  const name = (rawName || fallbackName).slice(0, 200);
+  const clientName = (typeof raw?.clientName === 'string' ? raw.clientName : '').slice(0, 200);
+  const rawCurrency = typeof raw?.currency === 'string' ? raw.currency.trim() : '';
+  const currency = (rawCurrency || '₹').slice(0, 10);
+
+  const globalPrices: Record<PriceItemKey, number> = { ...DEFAULT_GLOBAL_PRICES };
+  if (typeof raw?.globalPrices === 'object' && raw.globalPrices) {
+    for (const key of Object.keys(DEFAULT_GLOBAL_PRICES) as PriceItemKey[]) {
+      if (raw.globalPrices[key] !== undefined && raw.globalPrices[key] !== null) {
+        globalPrices[key] = toFiniteNumber(raw.globalPrices[key], 0);
+      }
+    }
+  }
+
+  const rawRooms = Array.isArray(raw?.rooms) && raw.rooms.length > 0 ? raw.rooms.slice(0, 100) : null;
+  const rooms: RoomData[] = rawRooms
+    ? rawRooms.map((r: any, idx: number) => {
+        const rawRoomId = typeof r?.id === 'string' ? r.id.trim() : '';
+        const roomId = SAFE_ID_REGEX.test(rawRoomId) ? rawRoomId : `room-${timestamp}-${idx + 1}`;
+        const roomName = (typeof r?.name === 'string' && r.name.trim() ? r.name.trim() : `Estimation Area ${idx + 1}`).slice(0, 200);
         const base = DEFAULT_ROOM(roomId, roomName);
-        return {
-          ...base,
-          ...r,
-          id: roomId,
-          name: roomName,
-          priceOverrides: {
-            ...base.priceOverrides,
-            ...(typeof r?.priceOverrides === 'object' && r.priceOverrides ? r.priceOverrides : {}),
-          },
-        };
+
+        const cleanRoom: any = { ...base };
+        for (const key of Object.keys(base) as (keyof RoomData)[]) {
+          if (key === 'id' || key === 'name' || key === 'priceOverrides') continue;
+          if (r && r[key] !== undefined && r[key] !== null) {
+            cleanRoom[key] = toFiniteNumber(r[key], 0);
+          }
+        }
+        cleanRoom.id = roomId;
+        cleanRoom.name = roomName;
+
+        const cleanOverrides: Record<PriceItemKey, number | undefined> = { ...base.priceOverrides };
+        if (typeof r?.priceOverrides === 'object' && r.priceOverrides) {
+          for (const key of Object.keys(base.priceOverrides) as PriceItemKey[]) {
+            const ov = r.priceOverrides[key];
+            if (ov !== undefined && ov !== null && ov !== '') {
+              cleanOverrides[key] = toFiniteNumber(ov, 0);
+            } else {
+              cleanOverrides[key] = undefined;
+            }
+          }
+        }
+        cleanRoom.priceOverrides = cleanOverrides;
+
+        return cleanRoom as RoomData;
       })
     : [DEFAULT_ROOM(`room-${timestamp}-1`, 'Estimation Area 1')];
 
-  return {
+  const result: ProjectData = {
     id,
     name,
     clientName,
     currency,
     globalPrices,
     rooms,
-    createdAt: typeof raw?.createdAt === 'number' ? raw.createdAt : timestamp,
-    updatedAt: typeof raw?.updatedAt === 'number' ? raw.updatedAt : timestamp,
+    createdAt: toEpochMillis(raw?.createdAt, timestamp),
+    updatedAt: toEpochMillis(raw?.updatedAt, timestamp),
   };
+
+  if (typeof raw?.userId === 'string' && raw.userId.trim()) {
+    result.userId = raw.userId.trim();
+  }
+
+  return result;
+}
+
+/**
+ * Checks if a project is an untouched blank default project
+ */
+export function isDefaultEmptyProject(project: ProjectData): boolean {
+  if (!project) return true;
+  if ((project.name || '').trim() !== 'New Project') return false;
+  if ((project.clientName || '').trim() !== '') return false;
+  if (Object.values(project.globalPrices || {}).some((v) => Number(v) !== 0)) return false;
+  if (!project.rooms || project.rooms.length !== 1) return false;
+  const r = project.rooms[0];
+  if ((r.name || '').trim() !== 'Estimation Area 1') return false;
+  for (const [k, v] of Object.entries(r)) {
+    if (k === 'id' || k === 'name') continue;
+    if (k === 'priceOverrides') {
+      if (v && Object.values(v as Record<string, any>).some((ov) => ov !== undefined && ov !== null && Number(ov) !== 0)) {
+        return false;
+      }
+      continue;
+    }
+    if (v !== undefined && v !== null && Number(v) !== 0) return false;
+  }
+  return true;
+}
+
+/**
+ * Deterministic content signature of a project excluding volatile metadata (updatedAt, userId)
+ * Used to avoid infinite Firestore read/write loops.
+ */
+export function getProjectContentSignature(project: ProjectData): string {
+  const normalized = sanitizeProject(project);
+  return JSON.stringify({
+    id: normalized.id,
+    name: normalized.name,
+    clientName: normalized.clientName,
+    currency: normalized.currency,
+    globalPrices: normalized.globalPrices,
+    rooms: normalized.rooms,
+  });
 }
 
 /**

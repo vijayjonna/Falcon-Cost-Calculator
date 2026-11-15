@@ -7,34 +7,52 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier of the project"
+          "description": "Unique identifier of the project",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
         "name": {
           "type": "string",
-          "description": "Name of the project"
+          "description": "Name of the project",
+          "minLength": 1,
+          "maxLength": 200
         },
         "clientName": {
           "type": "string",
-          "description": "Optional client name"
+          "description": "Optional client name",
+          "maxLength": 200
         },
         "currency": {
           "type": "string",
-          "description": "Currency symbol used in the project"
+          "description": "Currency symbol used in the project",
+          "minLength": 1,
+          "maxLength": 10
+        },
+        "globalPrices": {
+          "type": "object",
+          "description": "Standard rate prices for materials, laminates, hardware, and labor"
+        },
+        "rooms": {
+          "type": "array",
+          "description": "List of estimation spaces/rooms and their quantities"
         },
         "userId": {
           "type": "string",
-          "description": "Owner user ID"
+          "description": "Owner user ID matching Firebase Auth UID",
+          "minLength": 1,
+          "maxLength": 128
         },
         "createdAt": {
           "type": "number",
-          "description": "Timestamp when the project was created"
+          "description": "Unix epoch timestamp in milliseconds when the project was created"
         },
         "updatedAt": {
           "type": "number",
-          "description": "Timestamp when the project was last updated"
+          "description": "Unix epoch timestamp in milliseconds when the project was last updated"
         }
       },
-      "required": ["id", "name", "userId"]
+      "required": ["id", "name", "clientName", "currency", "globalPrices", "rooms", "userId", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
