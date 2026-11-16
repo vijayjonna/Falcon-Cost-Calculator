@@ -2160,7 +2160,7 @@ export default function App() {
                         {totals.plywoodBoxOtherHardwareCost > 0 && (
                           <div className="flex justify-between text-slate-500 dark:text-slate-400">
                             <span>• Box Other Hardware (from E)</span>
-                            <span className="font-bold text-amber-600 dark:text-amber-400">
+                            <span className="font-bold text-slate-700 dark:text-slate-200">
                               {formatCurrency(totals.plywoodBoxOtherHardwareCost, project.currency)}
                             </span>
                           </div>
@@ -2235,7 +2235,7 @@ export default function App() {
                         {totals.plywoodFrameOtherHardwareCost > 0 && (
                           <div className="flex justify-between text-slate-500 dark:text-slate-400">
                             <span>• Shutter Other Hardware (from E)</span>
-                            <span className="font-bold text-amber-600 dark:text-amber-400">
+                            <span className="font-bold text-slate-700 dark:text-slate-200">
                               {formatCurrency(totals.plywoodFrameOtherHardwareCost, project.currency)}
                             </span>
                           </div>
@@ -2315,7 +2315,7 @@ export default function App() {
                         {totals.mdfBoxOtherHardwareCost > 0 && (
                           <div className="flex justify-between text-slate-500 dark:text-slate-400">
                             <span>• MDF Box Other Hardware (from E)</span>
-                            <span className="font-bold text-amber-600 dark:text-amber-400">
+                            <span className="font-bold text-slate-700 dark:text-slate-200">
                               {formatCurrency(totals.mdfBoxOtherHardwareCost, project.currency)}
                             </span>
                           </div>
@@ -2381,7 +2381,7 @@ export default function App() {
                         {totals.mdfFrameOtherHardwareCost > 0 && (
                           <div className="flex justify-between text-slate-500 dark:text-slate-400">
                             <span>• MDF Shutter Other Hardware (from E)</span>
-                            <span className="font-bold text-amber-600 dark:text-amber-400">
+                            <span className="font-bold text-slate-700 dark:text-slate-200">
                               {formatCurrency(totals.mdfFrameOtherHardwareCost, project.currency)}
                             </span>
                           </div>
