@@ -11,12 +11,16 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        useCredentials: true,
         manifestFilename: 'manifest.json',
         includeAssets: [
           'favicon.ico',
+          'favicon-32x32.png',
           'apple-touch-icon.png',
           'icon.svg',
+          'pwa-144x144.png',
           'pwa-192x192.png',
+          'pwa-256x256.png',
           'pwa-512x512.png',
           'pwa-maskable-512x512.png',
         ],
@@ -27,14 +31,26 @@ export default defineConfig(() => {
           description:
             'Calculate custom interior project expenses room by room, with precise MDF/plywood, laminate, louvers, hardware, and separate box/frame labor cost estimates and per-room pricing overrides.',
           theme_color: '#184572',
-          background_color: '#e7e9ed',
+          background_color: '#184572',
           display: 'standalone',
           start_url: '/',
           scope: '/',
           icons: [
             {
+              src: '/pwa-144x144.png',
+              sizes: '144x144',
+              type: 'image/png',
+              purpose: 'any',
+            },
+            {
               src: '/pwa-192x192.png',
               sizes: '192x192',
+              type: 'image/png',
+              purpose: 'any',
+            },
+            {
+              src: '/pwa-256x256.png',
+              sizes: '256x256',
               type: 'image/png',
               purpose: 'any',
             },
@@ -49,12 +65,6 @@ export default defineConfig(() => {
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable',
-            },
-            {
-              src: '/icon.svg',
-              sizes: 'any',
-              type: 'image/svg+xml',
-              purpose: 'any',
             },
           ],
         },
