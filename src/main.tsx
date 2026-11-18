@@ -4,7 +4,67 @@ import { registerSW } from 'virtual:pwa-register';
 import App from './App.tsx';
 import './index.css';
 
-registerSW({ immediate: true });
+const ASSET_MIGRATION_KEY = 'falcon_blueprint_icon_v3';
+
+async function forceMobileCacheRefreshOnce() {
+  try {
+    if (localStorage.getItem(ASSET_MIGRATION_KEY) === '1') return;
+    localStorage.setItem(ASSET_MIGRATION_KEY, '1');
+
+    let clearedAny = false;
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      if (keys.length > 0) {
+        await Promise.all(keys.map((k) => caches.delete(k)));
+        clearedAny = true;
+      }
+    }
+
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const reg of regs) {
+        await reg.update().catch(() => {});
+      }
+    }
+
+    if (clearedAny) {
+      window.location.reload();
+    }
+  } catch {
+    // Non-fatal if storage/caches unavailable
+  }
+}
+
+void forceMobileCacheRefreshOnce();
+
+let hadController = typeof navigator !== 'undefined' && 'serviceWorker' in navigator && !!navigator.serviceWorker.controller;
+let reloadingForUpdate = false;
+
+if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController && !reloadingForUpdate) {
+      reloadingForUpdate = true;
+      window.location.reload();
+    }
+    hadController = true;
+  });
+}
+
+const updateSW = registerSW({
+  immediate: true,
+  onRegisteredSW(_swUrl, registration) {
+    if (!registration) return;
+    // Proactively check for updated assets/icons when returning to the mobile app
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        registration.update().catch(() => {});
+      }
+    });
+  },
+  onNeedRefresh() {
+    void updateSW(true);
+  },
+});
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
