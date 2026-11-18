@@ -17,9 +17,8 @@ export const FalconLogo: React.FC<FalconLogoProps> = ({
 }) => {
   const style = size ? { width: size, height: size } : undefined;
 
-  // Exact architectural blueprint slate-navy tone matching the reference sample
-  // Adaptive high-contrast blueprint sky tone for dark theme backgrounds
-  const markColor = color || (isDarkMode ? '#60a5fa' : '#184572');
+  // Exact architectural blueprint slate-navy tone in light mode, pure white in dark mode
+  const markColor = color || (isDarkMode ? '#ffffff' : '#184572');
 
   const svgContent = (
     <svg

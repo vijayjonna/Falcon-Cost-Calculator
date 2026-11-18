@@ -12,7 +12,7 @@ export default defineConfig(() => {
       VitePWA({
         registerType: 'autoUpdate',
         useCredentials: true,
-        manifestFilename: 'manifest.json',
+        manifestFilename: 'manifest-blueprint.json',
         includeAssets: [
           'falcon-blueprint.ico',
           'falcon-32.png',

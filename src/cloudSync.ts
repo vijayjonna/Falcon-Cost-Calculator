@@ -120,8 +120,13 @@ export function formatFirebaseErrorMessage(err: unknown): string {
   if (innerMessage.includes('Missing or insufficient permissions') || innerMessage.includes('permission-denied')) {
     return 'Cloud sync permission denied. Please sign out and sign back in with a verified Google account.';
   }
-  if (innerMessage.includes('the client is offline')) {
-    return 'You appear to be offline. Changes are saved locally and will sync when reconnected.';
+  if (
+    innerMessage.includes('the client is offline') ||
+    innerMessage.includes('code=unavailable') ||
+    innerMessage.includes('unavailable') ||
+    innerMessage.includes('Could not reach Cloud Firestore backend')
+  ) {
+    return 'Cloud Firestore is temporarily unreachable. Changes are saved locally and will sync when reconnected.';
   }
 
   return innerMessage || 'An unexpected cloud sync error occurred.';
