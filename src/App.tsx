@@ -383,20 +383,35 @@ export default function App() {
     };
   }, [currentUser]);
 
-  // Capture beforeinstallprompt for Android PWA / APK installation
+  // Capture beforeinstallprompt for Desktop & Android PWA installation
   useEffect(() => {
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+    if (isStandalone) return;
+
     const handleBeforeInstall = (e: any) => {
       e.preventDefault();
       setInstallPrompt(e);
     };
+    const handleAppInstalled = () => {
+      setInstallPrompt(null);
+    };
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
-    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+    window.addEventListener('appinstalled', handleAppInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
   }, []);
 
   const handleInstallApp = async () => {
     if (installPrompt) {
       await installPrompt.prompt();
-      setInstallPrompt(null);
+      const choice = await installPrompt.userChoice;
+      if (choice?.outcome === 'accepted') {
+        setInstallPrompt(null);
+      }
     }
   };
 
